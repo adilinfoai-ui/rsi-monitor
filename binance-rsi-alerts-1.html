@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RSI Monitor">
+<meta name="theme-color" content="#00d4ff">
+<meta name="description" content="مراقبة مؤشر RSI لجميع عملات Binance مع تنبيهات فورية">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon.svg">
+<title>RSI Monitor — Binance</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Tajawal:wght@300;400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/3.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-chart-financial/0.1.1/chartjs-chart-financial.min.js"></script>
+<style>
+  :root {
+    --bg: #050a0e;
+    --surface: #0a1520;
+    --surface2: #0f1e2e;
+    --border: #1a3045;
+    --accent: #00d4ff;
+    --green: #00ff88;
+    --red: #ff3366;
+    --yellow: #ffcc00;
+    --text: #cde8f5;
+    --muted: #4a7a99;
+    --overbought: #ff3366;
+    --oversold: #00ff88;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Tajawal', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0,212,255,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0,255,136,0.03) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* SCANLINES */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0 30px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--green));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 0 20px rgba(0,212,255,0.3);
+  }
+
+  .logo h1 {
+    font-size: 22px; font-weight: 900;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    text-shadow: 0 0 20px rgba(0,212,255,0.4);
+  }
+
+  .logo span { font-size: 12px; color: var(--muted); display: block; font-family: 'Share Tech Mono'; }
+
+  .status-bar {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: 'Share Tech Mono';
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 1.5s infinite;
+  }
+  .dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* CONTROLS */
+  .controls {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 24px; flex-wrap: wrap;
+  }
+
+  .tf-btn {
+    padding: 7px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--muted);
+    font-family: 'Share Tech Mono';
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tf-btn.active, .tf-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    box-shadow: 0 0 10px rgba(0,212,255,0.15);
+  }
+
+  .filter-group {
+    display: flex; gap: 8px; margin-right: auto;
+  }
+
+  .filter-btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-family: 'Tajawal';
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .filter-btn.ob.active { border-color: var(--red); color: var(--red); background: rgba(255,51,102,0.08); }
+  .filter-btn.os.active { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.08); }
+  .filter-btn.all.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+  .search-box {
+    padding: 7px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Share Tech Mono';
+    font-size: 13px;
+    width: 160px;
+    transition: border-color 0.2s;
+    direction: ltr;
+  }
+  .search-box:focus { outline: none; border-color: var(--accent); }
+  .search-box::placeholder { color: var(--muted); }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-card .val {
+    font-size: 28px; font-weight: 900;
+    font-family: 'Share Tech Mono';
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-card .lbl {
+    font-size: 12px; color: var(--muted);
+  }
+
+  .stat-card.ob .val { color: var(--red); text-shadow: 0 0 15px rgba(255,51,102,0.4); }
+  .stat-card.os .val { color: var(--green); text-shadow: 0 0 15px rgba(0,255,136,0.4); }
+  .stat-card.total .val { color: var(--accent); }
+  .stat-card.alerts .val { color: var(--yellow); }
+
+  /* TABLE */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table-header h2 { font-size: 14px; color: var(--muted); font-weight: 400; }
+
+  .refresh-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: rgba(0,212,255,0.08);
+    color: var(--accent);
+    font-family: 'Share Tech Mono';
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .refresh-btn:hover { background: rgba(0,212,255,0.18); }
+  .refresh-btn.spinning .icon { animation: spin 0.8s linear; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    padding: 12px 16px;
+    text-align: right;
+    color: var(--muted);
+    font-weight: 400;
+    font-family: 'Share Tech Mono';
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--accent); }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(26,48,69,0.5);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: rgba(0,212,255,0.03); }
+  tbody tr.alert-row { animation: alertFlash 0.5s ease; }
+
+  @keyframes alertFlash {
+    0% { background: rgba(0,212,255,0.1); }
+    100% { background: transparent; }
+  }
+
+  td {
+    padding: 11px 16px;
+    white-space: nowrap;
+    font-family: 'Share Tech Mono';
+    font-size: 12px;
+  }
+
+  .pair-cell { font-weight: 700; color: var(--text); font-size: 13px; }
+  .pair-cell span { color: var(--muted); font-size: 11px; }
+
+  .price-cell { color: var(--text); }
+
+  .rsi-cell {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .rsi-val {
+    font-size: 13px; font-weight: 700; min-width: 36px;
+  }
+
+  .rsi-bar-wrap {
+    width: 80px; height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .rsi-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+
+  .tag {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .tag.ob { background: rgba(255,51,102,0.15); color: var(--red); border: 1px solid rgba(255,51,102,0.3); }
+  .tag.os { background: rgba(0,255,136,0.12); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
+  .tag.neutral { background: rgba(74,122,153,0.12); color: var(--muted); border: 1px solid var(--border); }
+
+  .change-cell.pos { color: var(--green); }
+  .change-cell.neg { color: var(--red); }
+
+  .vol-cell { color: var(--muted); }
+
+  /* ALERTS PANEL */
+  .alerts-panel {
+    margin-top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .alerts-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .alerts-header h2 {
+    font-size: 14px; color: var(--yellow);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .alert-count {
+    background: var(--yellow);
+    color: #000;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 900;
+    font-family: 'Share Tech Mono';
+  }
+
+  .clear-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: 'Tajawal';
+  }
+  .clear-btn:hover { color: var(--text); }
+
+  .alerts-list {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 10px 0;
+  }
+
+  .alert-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 20px;
+    border-bottom: 1px solid rgba(26,48,69,0.4);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+
+  .alert-icon { font-size: 18px; }
+
+  .alert-info { flex: 1; }
+  .alert-info .pair { font-weight: 700; font-family: 'Share Tech Mono'; font-size: 13px; }
+  .alert-info .msg { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .alert-time {
+    font-family: 'Share Tech Mono';
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .alert-rsi {
+    font-family: 'Share Tech Mono';
+    font-size: 14px; font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+  }
+  .alert-rsi.ob { color: var(--red); background: rgba(255,51,102,0.12); }
+  .alert-rsi.os { color: var(--green); background: rgba(0,255,136,0.1); }
+
+  .empty-msg {
+    text-align: center; padding: 30px;
+    color: var(--muted); font-size: 13px;
+  }
+
+  /* LOADING */
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px;
+    z-index: 100;
+    transition: opacity 0.5s;
+  }
+
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .loader {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .loading-txt {
+    font-family: 'Share Tech Mono';
+    color: var(--accent);
+    font-size: 13px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* NOTIFICATION */
+  .notif {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-family: 'Share Tech Mono';
+    font-size: 13px;
+    color: var(--text);
+    z-index: 200;
+    display: none;
+    box-shadow: 0 4px 24px rgba(0,212,255,0.2);
+    white-space: nowrap;
+  }
+  .notif.show { display: block; animation: fadeInOut 3s ease forwards; }
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* SETTINGS */
+  .settings-section {
+    margin-top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .settings-section h3 { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+  }
+
+  .setting-item label {
+    display: block; font-size: 12px; color: var(--muted);
+    margin-bottom: 6px; font-family: 'Share Tech Mono';
+  }
+
+  .setting-item input[type="number"], .setting-item select {
+    width: 100%; padding: 8px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Share Tech Mono';
+    font-size: 13px;
+    direction: ltr;
+  }
+  .setting-item input:focus, .setting-item select:focus {
+    outline: none; border-color: var(--accent);
+  }
+
+  .save-btn {
+    margin-top: 16px;
+    padding: 9px 24px;
+    background: linear-gradient(135deg, var(--accent), #0099bb);
+    border: none; border-radius: 7px;
+    color: #000; font-weight: 700;
+    font-family: 'Tajawal'; font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 0 16px rgba(0,212,255,0.3);
+    transition: all 0.2s;
+  }
+  .save-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,212,255,0.4); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--surface2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* PROGRESS */
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 1px;
+    transition: width 0.3s;
+  }
+
+  @media (max-width: 700px) {
+    table { font-size: 11px; }
+    td, thead th { padding: 9px 10px; }
+    .rsi-bar-wrap { width: 50px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ═══════════ PWA INSTALL BANNER ═══════════ */
+  .install-banner {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 14px;
+    padding: 14px 20px;
+    display: none;
+    align-items: center;
+    gap: 14px;
+    z-index: 400;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 24px rgba(0,212,255,0.15);
+    opacity: 0;
+    transition: opacity 0.3s;
+    max-width: 90vw;
+    white-space: nowrap;
+  }
+
+  .install-banner .banner-icon { font-size: 28px; }
+
+  .install-banner .banner-text { flex: 1; }
+  .install-banner .banner-text b {
+    display: block; font-size: 14px; color: var(--text);
+    margin-bottom: 2px;
+  }
+  .install-banner .banner-text span {
+    font-size: 11px; color: var(--muted); font-family: 'Share Tech Mono';
+  }
+
+  .install-btn {
+    padding: 8px 18px;
+    background: linear-gradient(135deg, var(--accent), #0099bb);
+    border: none; border-radius: 8px;
+    color: #000; font-weight: 900;
+    font-family: 'Tajawal'; font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 0 12px rgba(0,212,255,0.3);
+  }
+  .install-btn:hover { filter: brightness(1.1); }
+
+  .dismiss-btn {
+    background: none; border: none;
+    color: var(--muted); font-size: 18px;
+    cursor: pointer; padding: 4px;
+    line-height: 1;
+  }
+  .dismiss-btn:hover { color: var(--text); }
+
+  /* Safe area for notched phones */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .install-banner { bottom: calc(24px + env(safe-area-inset-bottom)); }
+  }
+
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(5,10,14,0.92);
+    backdrop-filter: blur(6px);
+    z-index: 300;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%; max-width: 900px;
+    max-height: 92vh;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 40px rgba(0,212,255,0.08);
+    transform: translateY(20px);
+    transition: transform 0.25s;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap; gap: 10px;
+  }
+
+  .modal-title {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .modal-title h2 {
+    font-size: 18px; font-weight: 900;
+    font-family: 'Share Tech Mono';
+    color: var(--accent);
+  }
+  .modal-title .modal-price {
+    font-family: 'Share Tech Mono'; font-size: 15px; color: var(--text);
+  }
+  .modal-title .modal-change {
+    font-family: 'Share Tech Mono'; font-size: 13px; padding: 3px 8px;
+    border-radius: 5px;
+  }
+  .modal-title .modal-change.pos { color: var(--green); background: rgba(0,255,136,0.1); }
+  .modal-title .modal-change.neg { color: var(--red); background: rgba(255,51,102,0.1); }
+
+  .modal-tf-group { display: flex; gap: 6px; }
+  .modal-tf-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Share Tech Mono'; font-size: 11px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .modal-tf-btn.active, .modal-tf-btn:hover {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(0,212,255,0.08);
+  }
+
+  .modal-close {
+    width: 32px; height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .modal-close:hover { border-color: var(--red); color: var(--red); }
+
+  .modal-body {
+    flex: 1; overflow-y: auto;
+    padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  .chart-info-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .chart-info-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 14px;
+    font-family: 'Share Tech Mono'; font-size: 12px;
+  }
+  .chart-info-pill span { color: var(--muted); font-size: 10px; display: block; margin-bottom: 2px; }
+  .chart-info-pill b { color: var(--text); }
+
+  .chart-section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    position: relative;
+  }
+  .chart-section h3 {
+    font-size: 11px; color: var(--muted);
+    font-family: 'Share Tech Mono'; margin-bottom: 10px;
+    letter-spacing: 0.5px;
+  }
+
+  .chart-canvas-wrap { position: relative; }
+
+  .chart-loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface2);
+    border-radius: 8px;
+    font-family: 'Share Tech Mono'; font-size: 12px; color: var(--muted);
+    gap: 8px;
+  }
+  .chart-loading .mini-loader {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .rsi-levels {
+    display: flex; gap: 16px; margin-top: 6px;
+    font-family: 'Share Tech Mono'; font-size: 11px;
+  }
+  .rsi-level { display: flex; align-items: center; gap: 4px; }
+  .rsi-level-dot { width: 10px; height: 2px; border-radius: 1px; }
+
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td:first-child { color: var(--accent); }
+
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loader">
+  <div class="loader"></div>
+  <div class="loading-txt">جاري تحميل البيانات من Binance...</div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📡</div>
+      <div>
+        <h1>RSI MONITOR</h1>
+        <span>Binance — Real-time RSI Alerts</span>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-pill">
+        <div class="dot" id="connDot"></div>
+        <span id="connStatus">جاري الاتصال...</span>
+      </div>
+      <div class="status-pill">
+        <span>⏱</span>
+        <span id="lastUpdate">--:--:--</span>
+      </div>
+      <div class="status-pill">
+        <span id="pairCount">0</span>&nbsp;زوج
+      </div>
+    </div>
+  </header>
+
+  <!-- TIMEFRAME SELECTOR -->
+  <div class="controls">
+    <span style="color:var(--muted);font-size:12px;font-family:'Share Tech Mono'">الإطار:</span>
+    <button class="tf-btn active" data-tf="15m">15m</button>
+    <button class="tf-btn" data-tf="1h">1h</button>
+    <button class="tf-btn" data-tf="4h">4h</button>
+    <button class="tf-btn" data-tf="1d">1D</button>
+    <div class="filter-group">
+      <button class="filter-btn all active" data-filter="all">الكل</button>
+      <button class="filter-btn ob" data-filter="ob">تشبع شرائي 🔴</button>
+      <button class="filter-btn os" data-filter="os">تشبع بيعي 🟢</button>
+    </div>
+    <input class="search-box" id="searchBox" placeholder="ابحث BTCUSDT..." />
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row">
+    <div class="stat-card total">
+      <div class="val" id="statTotal">0</div>
+      <div class="lbl">إجمالي الأزواج</div>
+    </div>
+    <div class="stat-card ob">
+      <div class="val" id="statOB">0</div>
+      <div class="lbl">تشبع شرائي &gt;70</div>
+    </div>
+    <div class="stat-card os">
+      <div class="val" id="statOS">0</div>
+      <div class="lbl">تشبع بيعي &lt;30</div>
+    </div>
+    <div class="stat-card alerts">
+      <div class="val" id="statAlerts">0</div>
+      <div class="lbl">تنبيهات اليوم</div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <h2>أزواج USDT — مرتبة حسب RSI</h2>
+      <button class="refresh-btn" id="refreshBtn">
+        <span class="icon">↻</span> تحديث
+      </button>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="pair"># الزوج</th>
+            <th data-sort="price">السعر</th>
+            <th data-sort="rsi">RSI</th>
+            <th>الحالة</th>
+            <th data-sort="change">التغيير 24h</th>
+            <th data-sort="vol">الحجم 24h</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div class="alerts-panel">
+    <div class="alerts-header">
+      <h2>🔔 سجل التنبيهات <span class="alert-count" id="alertCount">0</span></h2>
+      <button class="clear-btn" id="clearAlerts">مسح الكل</button>
+    </div>
+    <div class="alerts-list" id="alertsList">
+      <div class="empty-msg">لا توجد تنبيهات بعد — جاري المراقبة...</div>
+    </div>
+  </div>
+
+  <!-- CHART MODAL -->
+  <div class="modal-overlay" id="chartModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">
+          <h2 id="modalSymbol">BTC/USDT</h2>
+          <span class="modal-price" id="modalPrice">—</span>
+          <span class="modal-change" id="modalChange">—</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="modal-tf-group" id="modalTfGroup">
+            <button class="modal-tf-btn" data-tf="15m">15m</button>
+            <button class="modal-tf-btn" data-tf="1h">1h</button>
+            <button class="modal-tf-btn" data-tf="4h">4h</button>
+            <button class="modal-tf-btn active" data-tf="1d">1D</button>
+            <button class="modal-tf-btn" data-tf="1w">1W</button>
+          </div>
+          <button class="modal-close" id="modalClose">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="chart-info-row" id="chartInfoRow"></div>
+        <div class="chart-section">
+          <h3>📈 PRICE — CANDLESTICK</h3>
+          <div class="chart-canvas-wrap" style="height:280px">
+            <div class="chart-loading" id="priceLoader"><div class="mini-loader"></div> جاري تحميل البيانات...</div>
+            <canvas id="priceChart" style="display:none"></canvas>
+          </div>
+        </div>
+        <div class="chart-section">
+          <h3>📊 RSI — <span id="rsiPeriodLabel">14</span></h3>
+          <div class="chart-canvas-wrap" style="height:140px">
+            <canvas id="rsiChart"></canvas>
+          </div>
+          <div class="rsi-levels">
+            <div class="rsi-level"><div class="rsi-level-dot" style="background:var(--red)"></div><span style="color:var(--red)">تشبع شرائي (<span id="obLabel">70</span>)</span></div>
+            <div class="rsi-level"><div class="rsi-level-dot" style="background:var(--green)"></div><span style="color:var(--green)">تشبع بيعي (<span id="osLabel">30</span>)</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="settings-section">
+    <h3>⚙️ إعدادات RSI</h3>
+    <div class="settings-grid">
+      <div class="setting-item">
+        <label>حد التشبع الشرائي (Overbought)</label>
+        <input type="number" id="setOB" value="70" min="50" max="95" step="1">
+      </div>
+      <div class="setting-item">
+        <label>حد التشبع البيعي (Oversold)</label>
+        <input type="number" id="setOS" value="30" min="5" max="50" step="1">
+      </div>
+      <div class="setting-item">
+        <label>فترة RSI (Period)</label>
+        <input type="number" id="setRSIPeriod" value="14" min="2" max="50" step="1">
+      </div>
+      <div class="setting-item">
+        <label>تحديث تلقائي كل (ثانية)</label>
+        <select id="setRefresh">
+          <option value="30">30 ثانية</option>
+          <option value="60" selected>دقيقة واحدة</option>
+          <option value="120">دقيقتان</option>
+          <option value="300">5 دقائق</option>
+        </select>
+      </div>
+    </div>
+    <button class="save-btn" id="saveSettings">💾 حفظ الإعدادات</button>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+let cfg = {
+  tf: '15m',
+  obLevel: 70,
+  osLevel: 30,
+  rsiPeriod: 14,
+  refreshInterval: 60,
+  filter: 'all',
+  sortBy: 'rsi',
+  sortDir: 1
+};
+
+let allData = [];
+let alerts = [];
+let refreshTimer = null;
+let alertsTodayCount = 0;
+let prevRSI = {};
+
+// ═══════════════════════════════════════════
+// RSI CALCULATION
+// ═══════════════════════════════════════════
+function calcRSI(closes, period = 14) {
+  if (closes.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    const g = d > 0 ? d : 0;
+    const l = d < 0 ? -d : 0;
+    avgGain = (avgGain * (period - 1) + g) / period;
+    avgLoss = (avgLoss * (period - 1) + l) / period;
+  }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+// ═══════════════════════════════════════════
+// FETCH DATA
+// ═══════════════════════════════════════════
+async function fetchTopPairs() {
+  const r = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+  const data = await r.json();
+  return data
+    .filter(t => t.symbol.endsWith('USDT') && parseFloat(t.quoteVolume) > 500000)
+    .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
+    .slice(0, 80)
+    .map(t => t.symbol);
+}
+
+async function fetchKlines(symbol, interval, limit = 50) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const r = await fetch(url);
+  const data = await r.json();
+  return data.map(k => parseFloat(k[4]));
+}
+
+async function fetch24hr(symbols) {
+  const r = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+  const all = await r.json();
+  const map = {};
+  all.forEach(t => map[t.symbol] = t);
+  return map;
+}
+
+async function loadAllData() {
+  const refreshBtn = document.getElementById('refreshBtn');
+  refreshBtn.classList.add('spinning');
+
+  try {
+    const symbols = await fetchTopPairs();
+    document.getElementById('pairCount').textContent = symbols.length;
+    const tickerMap = await fetch24hr(symbols);
+
+    const results = [];
+    const batchSize = 10;
+    let done = 0;
+
+    for (let i = 0; i < symbols.length; i += batchSize) {
+      const batch = symbols.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map(async sym => {
+          const closes = await fetchKlines(sym, cfg.tf, cfg.rsiPeriod + 20);
+          const rsi = calcRSI(closes, cfg.rsiPeriod);
+          const tick = tickerMap[sym] || {};
+          return {
+            symbol: sym,
+            pair: sym.replace('USDT', '/USDT'),
+            price: parseFloat(tick.lastPrice || 0),
+            change: parseFloat(tick.priceChangePercent || 0),
+            volume: parseFloat(tick.quoteVolume || 0),
+            rsi: rsi !== null ? Math.round(rsi * 10) / 10 : null
+          };
+        })
+      );
+      batchResults.forEach(r => { if (r.status === 'fulfilled') results.push(r.value); });
+      done += batch.length;
+      document.getElementById('progressFill').style.width = (done / symbols.length * 100) + '%';
+      await new Promise(res => setTimeout(res, 100));
+    }
+
+    allData = results.filter(d => d.rsi !== null);
+    checkAlerts();
+    renderTable();
+    updateStats();
+
+    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('ar-EG');
+    document.getElementById('connDot').className = 'dot';
+    document.getElementById('connStatus').textContent = 'متصل';
+
+    setTimeout(() => { document.getElementById('progressFill').style.width = '0%'; }, 800);
+  } catch (e) {
+    document.getElementById('connDot').className = 'dot red';
+    document.getElementById('connStatus').textContent = 'خطأ في الاتصال';
+    console.error(e);
+  }
+
+  refreshBtn.classList.remove('spinning');
+  document.getElementById('loader').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════
+function checkAlerts() {
+  allData.forEach(d => {
+    const prev = prevRSI[d.symbol];
+    const curr = d.rsi;
+
+    // تنبيه عند أول دخول للمنطقة
+    if (prev !== undefined) {
+      if (prev < cfg.obLevel && curr >= cfg.obLevel) {
+        addAlert(d, 'ob');
+      } else if (prev > cfg.osLevel && curr <= cfg.osLevel) {
+        addAlert(d, 'os');
+      }
+    }
+    prevRSI[d.symbol] = curr;
+  });
+}
+
+function addAlert(d, type) {
+  const alert = {
+    id: Date.now() + Math.random(),
+    symbol: d.symbol,
+    pair: d.pair,
+    rsi: d.rsi,
+    price: d.price,
+    type,
+    time: new Date().toLocaleTimeString('ar-EG'),
+    tf: cfg.tf
+  };
+  alerts.unshift(alert);
+  if (alerts.length > 100) alerts.pop();
+  alertsTodayCount++;
+  renderAlerts();
+  showNotif(d, type);
+  playBeep(type);
+}
+
+function playBeep(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = type === 'ob' ? 880 : 440;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+function showNotif(d, type) {
+  const n = document.getElementById('notif');
+  const emoji = type === 'ob' ? '🔴' : '🟢';
+  const msg = type === 'ob' ? `تشبع شرائي` : `تشبع بيعي`;
+  n.textContent = `${emoji} ${d.pair} — ${msg} | RSI: ${d.rsi} | ${cfg.tf}`;
+  n.className = 'notif show';
+  setTimeout(() => n.className = 'notif', 3100);
+}
+
+// ═══════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════
+function getRSIColor(rsi) {
+  if (rsi >= cfg.obLevel) return 'var(--red)';
+  if (rsi <= cfg.osLevel) return 'var(--green)';
+  if (rsi >= 60) return '#ff9966';
+  if (rsi <= 40) return '#66ddaa';
+  return 'var(--muted)';
+}
+
+function getRSIBarColor(rsi) {
+  if (rsi >= cfg.obLevel) return 'linear-gradient(90deg,#ff3366,#ff6699)';
+  if (rsi <= cfg.osLevel) return 'linear-gradient(90deg,#00ff88,#00ccaa)';
+  return 'linear-gradient(90deg,#4a7a99,#6aabcc)';
+}
+
+function formatVol(v) {
+  if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+  return v.toFixed(0);
+}
+
+function formatPrice(p) {
+  if (p >= 1000) return p.toLocaleString('en', {maximumFractionDigits: 2});
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function renderTable() {
+  const search = document.getElementById('searchBox').value.toUpperCase();
+  let data = [...allData];
+
+  // Filter
+  if (cfg.filter === 'ob') data = data.filter(d => d.rsi >= cfg.obLevel);
+  if (cfg.filter === 'os') data = data.filter(d => d.rsi <= cfg.osLevel);
+
+  // Search
+  if (search) data = data.filter(d => d.symbol.includes(search));
+
+  // Sort
+  data.sort((a, b) => {
+    let va = a[cfg.sortBy], vb = b[cfg.sortBy];
+    if (cfg.sortBy === 'pair') return cfg.sortDir * va.localeCompare(vb);
+    return cfg.sortDir * (vb - va);
+  });
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  if (data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">لا توجد نتائج</td></tr>`;
+    return;
+  }
+
+  data.forEach((d, i) => {
+    const isOB = d.rsi >= cfg.obLevel;
+    const isOS = d.rsi <= cfg.osLevel;
+    const color = getRSIColor(d.rsi);
+    const barColor = getRSIBarColor(d.rsi);
+    const barW = Math.min(100, d.rsi);
+    const changeClass = d.change >= 0 ? 'pos' : 'neg';
+    const changeSign = d.change >= 0 ? '+' : '';
+    const tagClass = isOB ? 'ob' : isOS ? 'os' : 'neutral';
+    const tagText = isOB ? 'تشبع شرائي' : isOS ? 'تشبع بيعي' : 'محايد';
+
+    const tr = document.createElement('tr');
+    if (isOB || isOS) tr.classList.add('alert-row');
+    tr.style.cursor = 'pointer';
+    tr.title = `انقر لعرض الرسم البياني لـ ${d.pair}`;
+    tr.addEventListener('click', () => openChart(d.symbol));
+    tr.innerHTML = `
+      <td class="pair-cell">${d.pair.replace('/USDT','')}<span>/USDT</span> <span style="color:var(--muted);font-size:10px">📈</span></td>
+      <td class="price-cell">$${formatPrice(d.price)}</td>
+      <td>
+        <div class="rsi-cell">
+          <span class="rsi-val" style="color:${color}">${d.rsi}</span>
+          <div class="rsi-bar-wrap">
+            <div class="rsi-bar" style="width:${barW}%;background:${barColor}"></div>
+          </div>
+        </div>
+      </td>
+      <td><span class="tag ${tagClass}">${tagText}</span></td>
+      <td class="change-cell ${changeClass}">${changeSign}${d.change.toFixed(2)}%</td>
+      <td class="vol-cell">$${formatVol(d.volume)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = allData.length;
+  document.getElementById('statOB').textContent = allData.filter(d => d.rsi >= cfg.obLevel).length;
+  document.getElementById('statOS').textContent = allData.filter(d => d.rsi <= cfg.osLevel).length;
+  document.getElementById('statAlerts').textContent = alertsTodayCount;
+}
+
+function renderAlerts() {
+  const list = document.getElementById('alertsList');
+  document.getElementById('alertCount').textContent = alerts.length;
+  document.getElementById('statAlerts').textContent = alertsTodayCount;
+
+  if (alerts.length === 0) {
+    list.innerHTML = `<div class="empty-msg">لا توجد تنبيهات بعد — جاري المراقبة...</div>`;
+    return;
+  }
+
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <div class="alert-icon">${a.type === 'ob' ? '🔴' : '🟢'}</div>
+      <div class="alert-info">
+        <div class="pair">${a.pair} <span style="color:var(--muted);font-size:11px">[${a.tf}]</span></div>
+        <div class="msg">${a.type === 'ob' ? 'دخل منطقة التشبع الشرائي' : 'دخل منطقة التشبع البيعي'} — $${formatPrice(a.price)}</div>
+      </div>
+      <div class="alert-rsi ${a.type}">${a.rsi}</div>
+      <div class="alert-time">${a.time}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════
+// Timeframe
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cfg.tf = btn.dataset.tf;
+    loadAllData();
+  });
+});
+
+// Filter
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cfg.filter = btn.dataset.filter;
+    renderTable();
+  });
+});
+
+// Sort
+document.querySelectorAll('thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const s = th.dataset.sort;
+    if (cfg.sortBy === s) cfg.sortDir *= -1; else { cfg.sortBy = s; cfg.sortDir = 1; }
+    renderTable();
+  });
+});
+
+// Search
+document.getElementById('searchBox').addEventListener('input', renderTable);
+
+// Refresh
+document.getElementById('refreshBtn').addEventListener('click', loadAllData);
+
+// Clear alerts
+document.getElementById('clearAlerts').addEventListener('click', () => {
+  alerts = [];
+  renderAlerts();
+});
+
+// Settings
+document.getElementById('saveSettings').addEventListener('click', () => {
+  cfg.obLevel = parseInt(document.getElementById('setOB').value);
+  cfg.osLevel = parseInt(document.getElementById('setOS').value);
+  cfg.rsiPeriod = parseInt(document.getElementById('setRSIPeriod').value);
+  cfg.refreshInterval = parseInt(document.getElementById('setRefresh').value);
+  startAutoRefresh();
+  renderTable();
+  updateStats();
+  showNotifMsg('✅ تم حفظ الإعدادات');
+});
+
+function showNotifMsg(msg) {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = 'notif show';
+  setTimeout(() => n.className = 'notif', 3100);
+}
+
+// Auto refresh
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadAllData, cfg.refreshInterval * 1000);
+}
+
+// ═══════════════════════════════════════════
+// CHART MODAL
+// ═══════════════════════════════════════════
+let priceChartInst = null;
+let rsiChartInst = null;
+let modalSymbol = null;
+let modalTf = '1d';
+
+async function openChart(symbol) {
+  modalSymbol = symbol;
+  const data = allData.find(d => d.symbol === symbol) || {};
+  const overlay = document.getElementById('chartModal');
+
+  // Header info
+  document.getElementById('modalSymbol').textContent = symbol.replace('USDT', '/USDT');
+  document.getElementById('modalPrice').textContent = data.price ? '$' + formatPrice(data.price) : '—';
+  const chg = data.change || 0;
+  const chgEl = document.getElementById('modalChange');
+  chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  chgEl.className = 'modal-change ' + (chg >= 0 ? 'pos' : 'neg');
+
+  // RSI labels
+  document.getElementById('obLabel').textContent = cfg.obLevel;
+  document.getElementById('osLabel').textContent = cfg.osLevel;
+  document.getElementById('rsiPeriodLabel').textContent = cfg.rsiPeriod;
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Set active TF btn
+  document.querySelectorAll('.modal-tf-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tf === modalTf);
+  });
+
+  await loadChartData(symbol, modalTf);
+}
+
+async function loadChartData(symbol, tf) {
+  // Show loaders
+  document.getElementById('priceLoader').style.display = 'flex';
+  document.getElementById('priceChart').style.display = 'none';
+
+  // Destroy old charts
+  if (priceChartInst) { priceChartInst.destroy(); priceChartInst = null; }
+  if (rsiChartInst) { rsiChartInst.destroy(); rsiChartInst = null; }
+
+  try {
+    // Fetch 100 candles
+    const limit = 100;
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${tf}&limit=${limit}`;
+    const r = await fetch(url);
+    const klines = await r.json();
+
+    const labels = klines.map(k => new Date(k[0]));
+    const opens  = klines.map(k => parseFloat(k[1]));
+    const highs  = klines.map(k => parseFloat(k[2]));
+    const lows   = klines.map(k => parseFloat(k[3]));
+    const closes = klines.map(k => parseFloat(k[4]));
+    const vols   = klines.map(k => parseFloat(k[5]));
+
+    // RSI calculation per bar
+    const rsiArr = calcRSIArray(closes, cfg.rsiPeriod);
+
+    // Info pills
+    const last = klines[klines.length - 1];
+    const hi24 = Math.max(...highs.slice(-24));
+    const lo24 = Math.min(...lows.slice(-24));
+    document.getElementById('chartInfoRow').innerHTML = `
+      <div class="chart-info-pill"><span>HIGH</span><b style="color:var(--green)">$${formatPrice(hi24)}</b></div>
+      <div class="chart-info-pill"><span>LOW</span><b style="color:var(--red)">$${formatPrice(lo24)}</b></div>
+      <div class="chart-info-pill"><span>VOL</span><b>$${formatVol(parseFloat(last[7]))}</b></div>
+      <div class="chart-info-pill"><span>RSI</span><b style="color:${getRSIColor(rsiArr[rsiArr.length-1])}">${rsiArr[rsiArr.length-1]?.toFixed(1) || '—'}</b></div>
+      <div class="chart-info-pill"><span>الشموع</span><b>${klines.length}</b></div>
+    `;
+
+    // ── PRICE CHART (line with fill for simplicity, colored by candle) ──
+    document.getElementById('priceLoader').style.display = 'none';
+    const priceCanvas = document.getElementById('priceChart');
+    priceCanvas.style.display = 'block';
+
+    // Build candlestick-like bars using a bar chart trick
+    // Use a combined dataset: green/red candles via segment coloring
+    const priceCtx = priceCanvas.getContext('2d');
+
+    // Candlestick simulation: body (open-close) + wick via custom plugin
+    priceChartInst = new Chart(priceCtx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Body',
+            data: closes.map((c, i) => ({ x: labels[i], y: [opens[i], closes[i]] })),
+            backgroundColor: closes.map((c, i) => c >= opens[i] ? 'rgba(0,255,136,0.85)' : 'rgba(255,51,102,0.85)'),
+            borderColor: closes.map((c, i) => c >= opens[i] ? '#00ff88' : '#ff3366'),
+            borderWidth: 1,
+            borderSkipped: false,
+            barPercentage: 0.5,
+            categoryPercentage: 0.8,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0a1520',
+            borderColor: '#1a3045',
+            borderWidth: 1,
+            titleColor: '#cde8f5',
+            bodyColor: '#4a7a99',
+            titleFont: { family: 'Share Tech Mono', size: 11 },
+            bodyFont: { family: 'Share Tech Mono', size: 11 },
+            callbacks: {
+              title: items => {
+                const d = labels[items[0].dataIndex];
+                return d.toLocaleString('en-GB', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+              },
+              label: item => {
+                const i = item.dataIndex;
+                return [
+                  `O: $${formatPrice(opens[i])}`,
+                  `H: $${formatPrice(highs[i])}`,
+                  `L: $${formatPrice(lows[i])}`,
+                  `C: $${formatPrice(closes[i])}`
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'category',
+            ticks: {
+              color: '#4a7a99',
+              font: { family: 'Share Tech Mono', size: 9 },
+              maxTicksLimit: 8,
+              maxRotation: 0,
+              callback: (val, idx) => {
+                const d = labels[idx];
+                if (!d) return '';
+                if (tf === '1d' || tf === '1w') return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+                return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+              }
+            },
+            grid: { color: 'rgba(26,48,69,0.4)' }
+          },
+          y: {
+            position: 'right',
+            ticks: { color: '#4a7a99', font: { family: 'Share Tech Mono', size: 9 }, callback: v => '$'+formatPrice(v) },
+            grid: { color: 'rgba(26,48,69,0.4)' }
+          }
+        }
+      },
+      plugins: [{
+        id: 'wicks',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          const meta = chart.getDatasetMeta(0);
+          ctx.save();
+          meta.data.forEach((bar, i) => {
+            const x = bar.x;
+            const hi = chart.scales.y.getPixelForValue(highs[i]);
+            const lo = chart.scales.y.getPixelForValue(lows[i]);
+            const top = Math.min(chart.scales.y.getPixelForValue(opens[i]), chart.scales.y.getPixelForValue(closes[i]));
+            const bot = Math.max(chart.scales.y.getPixelForValue(opens[i]), chart.scales.y.getPixelForValue(closes[i]));
+            ctx.strokeStyle = closes[i] >= opens[i] ? '#00ff88' : '#ff3366';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, hi); ctx.lineTo(x, top); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x, bot); ctx.lineTo(x, lo); ctx.stroke();
+          });
+          ctx.restore();
+        }
+      }]
+    });
+
+    // ── RSI CHART ──
+    const rsiLabels = labels.slice(cfg.rsiPeriod);
+    const rsiCtx = document.getElementById('rsiChart').getContext('2d');
+
+    rsiChartInst = new Chart(rsiCtx, {
+      type: 'line',
+      data: {
+        labels: rsiLabels,
+        datasets: [
+          {
+            label: 'RSI',
+            data: rsiArr,
+            borderColor: '#00d4ff',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            fill: false,
+            tension: 0.3,
+          },
+          {
+            label: 'OB',
+            data: new Array(rsiLabels.length).fill(cfg.obLevel),
+            borderColor: 'rgba(255,51,102,0.5)',
+            borderWidth: 1,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: 'OS',
+            data: new Array(rsiLabels.length).fill(cfg.osLevel),
+            borderColor: 'rgba(0,255,136,0.45)',
+            borderWidth: 1,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0a1520',
+            borderColor: '#1a3045',
+            borderWidth: 1,
+            titleColor: '#cde8f5',
+            bodyColor: '#4a7a99',
+            titleFont: { family: 'Share Tech Mono', size: 10 },
+            bodyFont: { family: 'Share Tech Mono', size: 10 },
+            filter: item => item.datasetIndex === 0,
+            callbacks: {
+              label: item => `RSI: ${item.parsed.y.toFixed(2)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'category',
+            ticks: {
+              color: '#4a7a99',
+              font: { family: 'Share Tech Mono', size: 9 },
+              maxTicksLimit: 6,
+              maxRotation: 0,
+              callback: (val, idx) => {
+                const d = rsiLabels[idx];
+                if (!d) return '';
+                if (tf === '1d' || tf === '1w') return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+                return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+              }
+            },
+            grid: { color: 'rgba(26,48,69,0.3)' }
+          },
+          y: {
+            position: 'right',
+            min: 0, max: 100,
+            ticks: { color: '#4a7a99', font: { family: 'Share Tech Mono', size: 9 }, stepSize: 25 },
+            grid: { color: 'rgba(26,48,69,0.3)' }
+          }
+        }
+      }
+    });
+
+  } catch(e) {
+    document.getElementById('priceLoader').innerHTML = '<span style="color:var(--red)">خطأ في تحميل البيانات</span>';
+    console.error(e);
+  }
+}
+
+function calcRSIArray(closes, period = 14) {
+  const result = [];
+  if (closes.length < period + 1) return result;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  result.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (period - 1) + (d > 0 ? d : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (d < 0 ? -d : 0)) / period;
+    result.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+  }
+  return result;
+}
+
+function closeModal() {
+  document.getElementById('chartModal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Modal TF buttons
+document.getElementById('modalTfGroup').addEventListener('click', e => {
+  const btn = e.target.closest('.modal-tf-btn');
+  if (!btn) return;
+  document.querySelectorAll('.modal-tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  modalTf = btn.dataset.tf;
+  if (modalSymbol) loadChartData(modalSymbol, modalTf);
+});
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('chartModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('chartModal')) closeModal();
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+loadAllData();
+startAutoRefresh();
+
+// ═══════════════════════════════════════════
+// PWA — SERVICE WORKER + INSTALL PROMPT
+// ═══════════════════════════════════════════
+let deferredInstallPrompt = null;
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => {
+        console.log('✅ SW registered:', reg.scope);
+      })
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+}
+
+// Capture install prompt
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  const banner = document.getElementById('installBanner');
+  if (banner) {
+    banner.style.display = 'flex';
+    setTimeout(() => banner.style.opacity = '1', 100);
+  }
+}
+
+document.getElementById('installBtn')?.addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    document.getElementById('installBanner').style.display = 'none';
+    showNotifMsg('✅ تم تثبيت التطبيق بنجاح!');
+  }
+  deferredInstallPrompt = null;
+});
+
+document.getElementById('dismissInstall')?.addEventListener('click', () => {
+  const banner = document.getElementById('installBanner');
+  if (banner) { banner.style.opacity = '0'; setTimeout(() => banner.style.display = 'none', 300); }
+});
+
+// Request notification permission
+async function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') showNotifMsg('🔔 تم تفعيل الإشعارات!');
+  }
+}
+requestNotifPermission();
+
+// App installed event
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBanner').style.display = 'none';
+  showNotifMsg('🎉 تم تثبيت RSI Monitor بنجاح!');
+});
+</script>
+
+<!-- PWA INSTALL BANNER -->
+<div class="install-banner" id="installBanner">
+  <div class="banner-icon">📲</div>
+  <div class="banner-text">
+    <b>ثبّت RSI Monitor</b>
+    <span>أضفه لشاشتك الرئيسية كتطبيق</span>
+  </div>
+  <button class="install-btn" id="installBtn">تثبيت</button>
+  <button class="dismiss-btn" id="dismissInstall">✕</button>
+</div>
+
+</body>
+</html>
